@@ -5,50 +5,44 @@ Phase plane plot function
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import scipy.integrate
 
 __all__ = [
     'phase_plane'
 ]
 
 
-def phase_plane(func,  initial_conditions,
-                simulation_times, limits,
-                args=(), odeint=scipy.integrate.odeint,
-                nvectors=[20, 20], ax=None):
+def phase_plane(odeobject, initial_conditions, display_window,
+                nvectors=[20, 20], calculation_window=None,
+                solution_direction='both',
+                markinitialpoint=False, ax=None):
     """
     Plot vector field and solution curves in the phase plane
     for planar autonomous systems.
 
     Parameters
     ----------
-    func : callable
-        Function that relates the point and the derivative for a
-        planar autonomous systems ``dx/dt = func(x)``.
+    odeobject : callable
+        A generic interface class to numeric integrators, defined
+        in scipy.integrate.
     initial_conditions : array of arrays
         A list containing a set of initial conditions. For each
         of these initial conditions the system will be simulated
         and plot in the phase plane
-    simulation_time : array of arrays
-        A list containing simulation times. One for each one of
-        of the initial conditions. Each simulation time is a
-        sequence of time points for which to solve for y. The
-        initial value point should be the first element of
-        this sequence.
-    limits : 4 elements array_like
-        A list containing 4 elements, respectively: lower limit
-        for x axis, upper limit for x axis, lower limit for y axis
-        and upper limit for x axis.
-    args : tuple, optional
-        Extra arguments to pass to function ``func``.
-    odeint : callable, optional
-        Solver for ordinary differential equations. Solvers should
-        have the signature ``odeint(auxfunc, x0, t,)`` and should
-        work with non-autonomous systems ``auxfunc(x, t)``. By
-        default uses ``scipy.integrate.odeint``.
-    nvectors : 2 elements array_like, optional
+    display_window : array_like
+        Contain 4 elements, respectively, the  lower limit and upper
+        limits of x and y axis.
+    nvectors : array_like, optional
         A list containing 2 elements, the number of columns and rows
         on the vector field grid. By default [20, 20].
+    calculation_window : array_like, optional
+        Contain 4 elements, respectively, the  lower limit and upper
+        limits of x and y axis. By default, 4 times the display window
+        in every direction.
+    solution_direction : str, optional
+        The solution can go 'foward', 'backward' or 'both'. The default
+        is 'both'
+    markinitialpoint : boolean, optional
+        If True mark the initial point on the plot. By default it is False.
     ax : matplotlib axis object, optional
         Axis in which the phase plane will be plot. If none is provided
         create a new one.
@@ -58,25 +52,30 @@ def phase_plane(func,  initial_conditions,
     if ax is None:
         _, ax = plt.subplots()
 
-    # check initial_conditions and simulation_time
-    if len(simulation_times) != len(initial_conditions):
-        raise ValueError("Simulation time and initial_conditions should \
-        have the same dimensions along the axis 0.")
+    # If no calculation window is provided, define one from display_window
+    if calculation_window is None:
+        x1mean = np.mean(display_window[:2])
+        x2mean = np.mean(display_window[2:])
+        x1min = display_window[0]
+        x1max = display_window[1]
+        x2min = display_window[2]
+        x2max = display_window[3]
+        calculation_window = [(x1min-x1mean)*4+x1mean,
+                              (x1max-x1mean)*4+x1mean,
+                              (x2min-x2mean)*4+x2mean,
+                              (x2max-x2mean)*4+x2mean]
 
-    # define auxiliar function
-    def auxfunc(x, t):
-        return func(x, *args)
+    # Define lower and upper limits from calculation_window
+    lower_limit = [calculation_window[0], calculation_window[2]]
+    upper_limit = [calculation_window[1], calculation_window[3]]
 
-    # simulate and plot the solutions for each one of the initial conditions
-    for i in range(len(simulation_times)):
-        state = odeint(auxfunc, initial_conditions[i], simulation_times[i])
-        ax.plot(state[:, 0], state[:, 1], linewidth=1.5)
-        ax.plot(initial_conditions[i][0], initial_conditions[i][1],
-                marker='o', markersize=5, color='black')
+    # Get function from odeobject object
+    def func(z):
+        return odeobject.f(0, z, *odeobject.f_params)
 
     # Generate grid of points
-    x = np.linspace(limits[0], limits[1], nvectors[0])
-    y = np.linspace(limits[2], limits[3], nvectors[1])
+    x = np.linspace(display_window[0], display_window[1], nvectors[0])
+    y = np.linspace(display_window[2], display_window[3], nvectors[1])
     x, y = np.meshgrid(x, y)
 
     # Compute vector field
@@ -85,7 +84,7 @@ def phase_plane(func,  initial_conditions,
     for i in range(x.shape[0]):
         for j in range(x.shape[1]):
             state2d = np.array([x[i, j], y[i, j]])
-            state2d_derivative = func(state2d, *args)
+            state2d_derivative = func(state2d)
             xv[i, j] = state2d_derivative[0]
             yv[i, j] = state2d_derivative[1]
 
@@ -96,6 +95,44 @@ def phase_plane(func,  initial_conditions,
 
     # Plot vector Field
     ax.quiver(x, y, xv, yv, norm, pivot='mid', units='xy', cmap=cm.plasma)
-    ax.axis(limits)
+
+
+    # Set simulation parameters
+    t1 = 100*1/np.mean(norm)*(np.max(upper_limit)-np.min(lower_limit))
+    dt = 1/100*1/np.mean(norm)*(np.max(upper_limit)-np.min(lower_limit))
+
+    for x0 in initial_conditions:
+        foward = []
+        backward = []
+        if solution_direction is'foward' or solution_direction is'both':
+            odeobject.set_initial_value(x0)
+            while odeobject.successful() and odeobject.t < t1:
+                xnext = odeobject.integrate(odeobject.t+dt)
+                if np.logical_or(xnext < lower_limit,
+                                 xnext > upper_limit).any():
+                    break
+                foward.append(xnext)
+
+        if solution_direction is 'backward' or solution_direction is'both':
+            odeobject.set_initial_value(x0)
+            while odeobject.successful() and odeobject.t > -1*t1:
+                xnext = odeobject.integrate(odeobject.t-dt)
+                if np.logical_or(xnext < lower_limit,
+                                 xnext > upper_limit).any():
+                    break
+                backward.append(xnext)
+
+        if markinitialpoint:
+            ax.plot(x0[0], x0[1], marker='o', markersize=5, color='black')
+
+        x0 = np.reshape(x0, (-1, 2))
+        foward = np.reshape(foward, (-1, 2))
+        backward = np.reshape(backward[::-1], (-1, 2))
+
+        x = np.concatenate((backward, x0, foward), axis=0)
+
+        ax.plot(x[:, 0], x[:, 1], linewidth=1.5)
+
+    ax.axis(display_window)
 
     return

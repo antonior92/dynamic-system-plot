@@ -1,10 +1,11 @@
 from dynplt import phase_plane
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.integrate import ode
 
 
 # Van der Poll oscilator
-def vanderpoll(x, mu):
+def vanderpoll(t, x, mu):
     dx = np.zeros(2)
     dx[0] = x[1]
     dx[1] = mu*(1-x[0]**2)*x[1]-x[0]
@@ -32,15 +33,17 @@ initial_conditions = [[0.1, 0.1],
                       [-2, 3],
                       [1, -3],
                       [-1, 3]]
-simulation_times = [np.linspace(0, 100, 10000)]*len(initial_conditions)
-mu = 2
+
+mu = 3
+
+# Define ODE solver
+r = ode(vanderpoll).set_f_params(mu).set_integrator('lsoda')
 
 # Create axis
 _, ax = plt.subplots()
 
 # plot_phase_plane function
-phase_plane(vanderpoll, initial_conditions, simulation_times,
-            [-6, 6, -6, 6], args=(mu,), ax=ax)
+phase_plane(r, initial_conditions, [-6, 6, -6, 6], solution_direction='both', ax=ax)
 
 ax.set_xlabel("x", fontsize=16)
 ax.set_ylabel("y", fontsize=16)

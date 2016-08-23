@@ -40,17 +40,17 @@ def cobweb(func, initial_conditon, nsteps, limits, args=(), ax=None):
     x = np.linspace(limits[0], limits[1], 1000)
     y = list(map(lambda z: func(z, *args), x))
 
-    plt.plot(x, x, linewidth=1.5, color='black')
-    plt.plot(x, y, linewidth=1.5, color='blue')
+    ax.plot(x, x, linewidth=1.5, color='black')
+    ax.plot(x, y, linewidth=1.5, color='blue')
 
     # Interate and plot cobweb segments
     startpoint = initial_conditon
     for i in range(nsteps):
         endpoint = func(startpoint, *args)
-        plt.plot([startpoint, startpoint, endpoint],
+        ax.plot([startpoint, startpoint, endpoint],
                  [startpoint, endpoint, endpoint],
-                 color='red',
-                 marker='o',
-                 markersize=3,
-                 markerfacecolor='black')
+                color='red',
+                marker='o',
+                markersize=3,
+                markerfacecolor='black')
         startpoint = endpoint
